@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kuesioner Profil Pola Pikir</title>
+  <style>
+    :root{--gap:12px;--card:#ffffff;--ink:#222;--muted:#666;--brand:#0d6efd;--bg:#f6f7fb}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    header{padding:24px}
+    h1{margin:0 0 6px}
+    .wrap{max-width:960px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.05);padding:20px}
+    .grid{display:grid;gap:var(--gap)}
+    .q{padding:14px;border:1px solid #e8e8ef;border-radius:12px}
+    .q legend{font-weight:600;margin-bottom:8px}
+    .opts{display:grid;gap:8px}
+    @media (min-width:720px){
+      .opts{grid-template-columns:repeat(4,1fr)}
+    }
+    label.opt{display:flex;align-items:center;gap:8px;border:1px solid #e8e8ef;border-radius:10px;padding:10px}
+    .muted{color:var(--muted)}
+    .actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    button{cursor:pointer;border:0;border-radius:10px;padding:10px 14px;font-weight:600}
+    button.primary{background:var(--brand);color:#fff}
+    button.ghost{background:#eef2ff}
+    .result{display:none;margin-top:16px;padding:16px;border:1px dashed #d7dbf8;border-radius:12px;background:#fbfcff}
+    .pill{display:inline-block;padding:.25rem .6rem;border-radius:999px;background:#eef2ff}
+    .req{color:#c00;font-size:.9rem}
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <h1>Kuesioner Profil Pola Pikir</h1>
+    <p class="muted">Beri tanda pada setiap pernyataan yang sesuai dengan pendapat Anda (Skala Likert: Sangat Setuju s.d. Sangat Tidak Setuju). Setelah selesai, klik <b>Hitung Skor</b> untuk melihat kategori.</p>
+  </header>
+
+  <main class="wrap">
+    <form id="form" class="card grid" novalidate>
+
+      <!-- Helper to render one question block -->
+      <template id="tpl-q">
+        <fieldset class="q">
+          <legend></legend>
+          <div class="opts"></div>
+          <div class="req" hidden>Harap pilih satu jawaban.</div>
+        </fieldset>
+      </template>
+
+      <div class="actions">
+        <button type="button" class="primary" id="calc">Hitung Skor</button>
+        <button type="reset" class="ghost" id="reset">Reset</button>
+        <span class="muted">Total item: <span id="totalItems">0</span></span>
+      </div>
+
+      <section id="out" class="result">
+        <h2>Hasil</h2>
+        <p><b>Skor</b>: <span class="pill" id="score">0</span></p>
+        <p><b>Kategori Mindset</b>: <span class="pill" id="cat">-</span></p>
+        <p class="muted" id="explain"></p>
+      </section>
+    </form>
+  </main>
+
+  <script>
+    // Pernyataan (mengacu pada dokumen sumber)
+    const items = [
+      'Kemampuan Anda adalah sesuatu yang sangat mendasar yang tidak banyak dapat Anda ubah lagi.',
+      'Tidak peduli seberapapun tingkat kemampuan Anda saat ini, Anda bisa mengubahnya walaupun sedikit.',
+      'Anda akan selalu dapat mengubah kemampuan Anda.',
+      'Anda adalah seseorang yang unik, tidak banyak yang dapat dilakukan untuk mengubahnya.',
+      'Anda akan selalu dapat mengubah diri Anda sendiri.',
+      'Kemampuan dalam bidang seni dan musik dapat dipelajari oleh siapapun.',
+      'Hanya sedikit orang yang benar-benar mahir dalam olahraga, Anda harus membawa bakat ini sejak lahir.',
+      'Matematika lebih mudah dipelajari oleh pria atau seseorang yang berada dalam lingkungan yang menyukainya.',
+      'Makin keras Anda mengerjakan sesuatu makin mahir Anda dalam hal ini.',
+      'Tidak peduli tipe apapun Anda saat ini, Anda akan selalu dapat mengubahnya.',
+      'Mencoba sesuatu yang baru akan sangat menyulitkan Anda sehingga Anda ingin menghindarinya.',
+      'Sebagian orang baik dan pintar, sebagian lagi tidak. Tidak banyak yang dapat berubah.',
+      'Saya sangat menghargai kritik dan saran dari siapapun juga terkait dengan kinerja saya saat ini.',
+      'Saya kurang senang bila ada kritik dan saran dari orang lain.',
+      'Semua orang yang tanpa cacat otak atau cacat lahir memiliki kemampuan yang sama dalam belajar.',
+      'Anda bisa mempelajari sesuatu yang baru, tapi Anda tidak bisa mengubah kemampuan Anda.',
+      'Anda dapat melakukan sesuatu secara berbeda, tapi sebenarnya Anda tetap tidak dapat mengubah kemampuan Anda.',
+      'Semua orang pada dasarnya baik, tapi kadang-kadang membuat keputusan yang salah.',
+      'Alasan terpenting mengapa Anda melakukan pekerjaan Anda adalah keinginan untuk mempelajari sesuatu yang baru.',
+      'Orang yang benar-benar cerdas, tidak perlu bekerja keras.'
+    ];
+
+    // Skema penilaian: urutan nilai untuk (SS, S, TS, STS) per nomor, sesuai tabel skor pada dokumen.
+    const scoringMap = [
+      [0,1,2,3], // 1
+      [3,2,1,0], // 2
+      [3,2,1,0], // 3
+      [0,1,2,3], // 4
+      [3,2,1,0], // 5
+      [3,2,1,0], // 6
+      [0,1,2,3], // 7
+      [0,1,2,3], // 8
+      [3,2,1,0], // 9
+      [3,2,1,0], // 10
+      [0,1,2,3], // 11
+      [0,1,2,3], // 12
+      [3,2,1,0], // 13
+      [0,1,2,3], // 14
+      [3,2,1,0], // 15
+      [0,1,2,3], // 16
+      [0,1,2,3], // 17
+      [3,2,1,0], // 18
+      [3,2,1,0], // 19
+      [0,1,2,3], // 20
+    ];
+
+    const labels = ['Sangat Setuju','Setuju','Tidak Setuju','Sangat Tidak Setuju'];
+
+    // Render pertanyaan
+    const form = document.getElementById('form');
+    const tpl = document.getElementById('tpl-q');
+    const totalEl = document.getElementById('totalItems');
+
+    items.forEach((text, idx) => {
+      const n = idx + 1;
+      const node = tpl.content.cloneNode(true);
+      const fs = node.querySelector('fieldset');
+      const legend = node.querySelector('legend');
+      const opts = node.querySelector('.opts');
+      const req = node.querySelector('.req');
+
+      fs.id = `q${n}`;
+      legend.textContent = `${n}. ${text}`;
+
+      labels.forEach((lab, i) => {
+        const id = `q${n}_${i}`;
+        const wrap = document.createElement('label');
+        wrap.className = 'opt';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = `q${n}`;
+        input.id = id;
+        input.value = scoringMap[idx][i];
+        input.required = true;
+        const span = document.createElement('span');
+        span.textContent = lab;
+        wrap.appendChild(input);
+        wrap.appendChild(span);
+        opts.appendChild(wrap);
+      });
+
+      // Validasi sederhana
+      fs.addEventListener('invalid', () => { req.hidden = false; }, true);
+      fs.addEventListener('input', () => { req.hidden = true; });
+
+      form.insertBefore(node, document.querySelector('.actions'));
+    });
+
+    totalEl.textContent = items.length;
+
+    // Hitung skor & kategori
+    const out = document.getElementById('out');
+    const scoreEl = document.getElementById('score');
+    const catEl = document.getElementById('cat');
+    const explainEl = document.getElementById('explain');
+
+    function categorize(total){
+      if (total <= 20) return ['F','Fixed'];
+      if (total <= 33) return ['FG','Cenderung Fixed → Growth'];
+      if (total <= 44) return ['GF','Cenderung Growth → Fixed'];
+      return ['G','Growth'];
+    }
+
+    document.getElementById('calc').addEventListener('click', () => {
+      // Cek kelengkapan
+      const data = new FormData(form);
+      if ([...Array(items.length)].some((_,i)=>!data.get(`q${i+1}`))){
+        // Trigger native validation highlight
+        const firstMissing = [...form.querySelectorAll('fieldset')].find(fs => !form.querySelector(`input[name="${fs.id}"]:checked`));
+        if (firstMissing){
+          firstMissing.querySelector('.req').hidden = false;
+          firstMissing.scrollIntoView({behavior:'smooth',block:'center'});
+        }
+        return;
+      }
+
+      let total = 0;
+      for (let i=1;i<=items.length;i++){
+        total += Number(data.get(`q${i}`));
+      }
+
+      const [short, desc] = categorize(total);
+      scoreEl.textContent = total;
+      catEl.textContent = `${short}`;
+      explainEl.textContent = `Kategori ${short} (${desc}). Rentang: F (0–20), FG (21–33), GF (34–44), G (45–60).`;
+
+      out.style.display = 'block';
+      out.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      out.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
